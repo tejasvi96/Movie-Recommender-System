@@ -4,9 +4,9 @@ import torch
 from loguru import logger
 
 
-logger.add("log_random.log")
+logger.add("log_prec.log")
 
-movie_file="moviemapping_genre.txt"
+movie_file="moviemapping_imdb.txt"
 
 #optional use to take intersection of the movies
 links_file='links.csv'
@@ -17,10 +17,16 @@ ratings_file="ratings.csv"
 #User embedding features size
 features = 200
 
-embeddings_file='embeddings_genre.pt'
+embeddings_file='embeddings_imdb.pt'
 #if use embedding then hybrid system otherwise standard VAE
 use_embedding=1
 
+# Takes two values masked_recall and recall
+eval_metric='recall'
+
+load_model=1
+
+model_file='hybrid_imdb.pt'
 
 logger.info(movie_file)
 logger.info(links_file)
@@ -31,7 +37,7 @@ logger.info(embeddings_file)
 # then dont use vecs but use inp to feed in model
 # Use vecs as long and inp as float
 #number of epochs
-epochs=50
+epochs=0
 
 # The actual learning rate
 lr = 0.0001
@@ -40,8 +46,10 @@ batch_size=500
 
 # To calculate the score Recall @R matches top R movies
 recall_top=20
-device=torch.device("cuda")
-
+if torch.cuda.is_available:
+    device=torch.device("cuda")
+else:
+    device=torch.device("cpu")
 with open (movie_file,'r') as fp:
     data=fp.readlines()
 
@@ -105,7 +113,6 @@ def create_matrix(data, user_col, item_col, rating_col):
     cols = data[item_col].cat.codes
     rating = data[rating_col]
     ratings = csr_matrix((rating, (rows, cols)),dtype=np.int16)
-#     ratings.eliminate_zeros()
     return ratings, data
 
 
@@ -167,8 +174,6 @@ class HybridVAE(nn.Module):
 #         x=x.to(device)
         if use_embedding:
             x=self.emb(x)
-#          data=data.squeeze(dim=1)
-#         print(data.shape)
         x = x.reshape(x.shape[0],-1)
         x = F.relu(self.enc1(x))
         x = self.enc2(x).view(-1, 2, features)
@@ -307,28 +312,62 @@ import torch.nn.functional as F
 train_loss = []
 val_loss = []
 min_val_loss=1000
-for epoch in range(epochs):
-    print(f"Epoch {epoch+1} of {epochs}")
-    train_epoch_loss = fit(model,trainloader)
-    val_epoch_loss = validate(model, valloader)
-    train_loss.append(train_epoch_loss)
-    val_loss.append(val_epoch_loss)
-    print(f"Train Loss: {train_epoch_loss:.4f}")
-    print(f"Val Loss: {val_epoch_loss:.4f}")
-    if val_epoch_loss<min_val_loss:
-        min_val_loss=val_epoch_loss
-        torch.save(model,"hybrid_random.pt")
+if load_model==0:
+    for epoch in range(epochs):
+        print(f"Epoch {epoch+1} of {epochs}")
+        train_epoch_loss = fit(model,trainloader)
+        val_epoch_loss = validate(model, valloader)
+        train_loss.append(train_epoch_loss)
+        val_loss.append(val_epoch_loss)
+        print(f"Train Loss: {train_epoch_loss:.4f}")
+        print(f"Val Loss: {val_epoch_loss:.4f}")
+        if val_epoch_loss<min_val_loss:
+            min_val_loss=val_epoch_loss
+            torch.save(model,"hybrid_imdb.pt")
 
-logger.info(train_loss)
-logger.info(val_loss)
-
-# model=torch.load("hybrid_imdb.pt")
+    logger.info(train_loss)
+    logger.info(val_loss)
+else:
+    model=torch.load(model_file)
+    logger.log("model loaded successfully")
 
 # model=torch.load('simple.pt')
-# Testing logic which gives the output as the precision score
-def test(model, dataloader,r):
+def test_rec(model, dataloader,r):
+    print("using normal precision")
     model.eval()
     prec_values=[]
+    running_loss = 0.0
+    dataloader=DataLoader(TestDataset,batch_size=1)
+    with torch.no_grad():
+        for i, data in tqdm(enumerate(dataloader), total=int(len(dataloader)/dataloader.batch_size)):
+            inp,vec,_=data
+            vec=vec.to(torch.int64)
+            inp=inp.to(device)
+            vec=vec.to(device)
+            optimizer.zero_grad()
+            reconstruction, mu, logvar = model(vec)
+            inds=reconstruction.topk(1000).indices
+            m=inp.shape[0]
+            movs_values=[]
+            inds=inds.detach()
+            for l in range(m):
+                b=np.nonzero(inp[l].detach())
+                b=[k[0].item() for k in b]
+                s=inds[l][:r]
+                a=[1 for v in s if v in b]
+                prec_values.append((sum(a)/r))
+        bce_loss = criterion(reconstruction, inp.float())
+        loss = final_loss(bce_loss, mu, logvar)
+        lossValues.append(loss.item())
+        running_loss += loss.item()
+    val_loss = running_loss/len(dataloader.dataset)
+    return val_loss,prec_values
+
+# Testing logic which gives the output as the recall score
+def test(model, dataloader,r):
+    print("using masked recall")
+    model.eval()
+    recall_values=[]
     running_loss = 0.0
     dataloader=DataLoader(TestDataset,batch_size=1)
     with torch.no_grad():
@@ -352,33 +391,29 @@ def test(model, dataloader,r):
                 s=[]
                 k=0
                 temp=[l.item() for l in inds[j].detach()]
-#                 print(t)
-#                 print(temp)
                 s=[ind for ind in temp if ind not in t][:r]
                 movs_values.append(s)
-#                 print(len(s))
         
             for l in range(m):
-#                 print(movs_values[l])
-#                 print(movs[l])
+
                 b=np.nonzero(movs[l].detach())
                 b=[k[0].item() for k in b]
-#                 print(b)
                 a=[1 for v in movs_values[l] if v in b]
-#                 print((sum(a)))
-                prec_values.append((sum(a)/r))
+                recall_values.append((sum(a)/r))
             
             bce_loss = criterion(reconstruction, inp.float())
             loss = final_loss(bce_loss, mu, logvar)
-    #         print(loss.item())
+    
             lossValues.append(loss.item())
             running_loss += loss.item()
-#             loss.backward()
     val_loss = running_loss/len(dataloader.dataset)
-    return val_loss,prec_values
+    return val_loss,recall_values
 
-l,prec_values=test(model,testloader,r=recall_top)
+if eval_metric=='masked_recall':
+    l,recall_values=test(model,testloader,r=recall_top)
+else:
+    l,recall_values=test_rec(model,testloader,r=recall_top)
 print(l)
-print(sum(prec_values)/len(prec_values))
+print(sum(recall_values)/len(recall_values))
 logger.info(l)
-logger.info(sum(prec_values)/len(prec_values))
+logger.info(sum(recall_values)/len(recall_values))
