@@ -12,6 +12,8 @@ To learn the movie embedding, two types of features set are explored-
 1) Movie Genres where 18 genres are each used as a different feature.
 2)Plot outlines of the movies are extracted from IMDB and sentiment analysis pipeline is used to produce a feature set for a movie which is used to produce the corresponding embedding.
 
+![Images.](https://github.com/tejasvi96/Movie-Recommender-System/blob/main/Model.png?raw=True)
+
 The evaluation methodology is for users in the test set we use Recall @R to match the top R model predictions for a user with the movies he/she has already watched
 
 
@@ -126,4 +128,10 @@ with open (movie_file,'r') as fp:
 # Set the input user movies here
 movie_regex_to_match='terminator'
 ```
+# Results
+
+![Images.](https://github.com/tejasvi96/Movie-Recommender-System/blob/main/Screenshot_2020-12-23%20JupyterLab.png?raw=True)
+![Images.](https://github.com/tejasvi96/Movie-Recommender-System/blob/main/Screenshot_2020-12-23%20JupyterLab_1.png?raw=True)
+![Images.](https://github.com/tejasvi96/Movie-Recommender-System/blob/main/Screenshot_2020-12-28%20JupyterLab.png?raw=True)
+
 
