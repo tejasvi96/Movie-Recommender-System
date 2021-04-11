@@ -2,7 +2,7 @@
 
 # Background
 
-In this project we consider the problem of recommender system where users interact with the set of items and the aim of the businesses is to maximize the user engagement. Collaborative filtering is one such approach where suggestions based on the other similar users can be generated. We considered VAE's for this problem which help us to model a user using a distribution over the latent vectors to represent the users.  [here](https://www.kdd.org/kdd2018/files/deep-learning-day/DLDay18_paper_45.pdf)
+In this project we consider the problem of recommender system where users interact with the set of items and the aim of the businesses is to maximize the user engagement. Collaborative filtering is one such approach where suggestions based on the other similar users can be generated. We considered VAE's for this problem which help us to model a user using a distribution over the latent vectors to represent the users. We took reference from the paper [here](https://www.kdd.org/kdd2018/files/deep-learning-day/DLDay18_paper_45.pdf)
 
 Traditional approaches involve Matrix Factorization of the binarized matrix using linear methods. We make use of the Variational Autoencoders to arrive at a better representation by encoding each user over a distribution of latent feature vectors. 
 
